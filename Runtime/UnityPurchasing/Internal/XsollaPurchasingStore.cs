@@ -242,6 +242,9 @@ namespace Xsolla.SDK.UnityPurchasing
             var isTracked = !string.IsNullOrEmpty(item.transactionId);
             var key = (item.transactionId, item.sku);
 
+            // The cart item carries the owned units of the row (a collapsed restore reports several in one row).
+            var cart = new Cart(new CartItem(product, item.quantity > 0 ? item.quantity : 1));
+
             if (product.definition.type == ProductType.Consumable)
             {
                 // Already confirmed (or being consumed) in this session: the server just has not caught up yet.
@@ -254,13 +257,13 @@ namespace Xsolla.SDK.UnityPurchasing
                     _deliveredPurchases.Add(key);
                 }
 
-                return new PendingOrder(new Cart(product), CreateOrderInfo(item));
+                return new PendingOrder(cart, CreateOrderInfo(item));
             }
 
             if (isTracked)
                 _deliveredPurchases.Add(key);
 
-            return new ConfirmedOrder(new Cart(product), CreateOrderInfo(item));
+            return new ConfirmedOrder(cart, CreateOrderInfo(item));
         }
 
         public override void Purchase(ICart cart)
@@ -415,9 +418,11 @@ namespace Xsolla.SDK.UnityPurchasing
         }
 
         /// <summary>
-        /// Re-delivers everything the server still holds through the purchase callback
+        /// Re-delivers the unconsumed consumables the server still holds through the purchase callback
         /// (<see cref="StoreController.OnPurchasePending"/>). Purchases already handed to Unity IAP this session
-        /// are skipped; <see cref="FetchPurchases"/> reports them.
+        /// are skipped. Owned non-consumables are not re-delivered: the restored rows have no stable transaction
+        /// id, so they would look like new purchases; <see cref="FetchPurchases"/>, which follows the restore,
+        /// reports them as confirmed orders instead.
         /// </summary>
         internal void RestoreTransactions(Action<bool, string> callback)
         {
@@ -432,7 +437,13 @@ namespace Xsolla.SDK.UnityPurchasing
             _storeClient.RestorePurchases(
                 onSuccess: items => {
                     foreach (var item in items)
+                    {
+                        var product = FindProduct(item.sku);
+                        if (product != null && product.definition.type != ProductType.Consumable)
+                            continue;
+
                         OnPurchaseSucceeded(item);
+                    }
 
                     callback?.Invoke(true, null);
                 },
