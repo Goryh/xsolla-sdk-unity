@@ -1,76 +1,82 @@
 ﻿#if !XSOLLA_SDK_UNITY_PURCHASING_DISABLE
 using JetBrains.Annotations;
-using UnityEngine.Purchasing.Extension;
+using UnityEngine;
+using UnityEngine.Purchasing;
 using Xsolla.SDK.Common;
 
 namespace Xsolla.SDK.UnityPurchasing
 {
     /// <summary>
-    /// Provides a Unity Purchasing module for Xsolla integration.
+    /// Registers the Xsolla store with Unity IAP 5.
+    /// <example>
+    /// <code>
+    /// XsollaPurchasingModule.Register(configuration);
+    /// var controller = UnityIAPServices.StoreController(XsollaPurchasingModule.StoreName);
+    /// </code>
+    /// </example>
     /// </summary>
-    public class XsollaPurchasingModule : AbstractPurchasingModule
+    public static class XsollaPurchasingModule
     {
         /// <summary>
-        /// Gets the store name for Xsolla Purchasing.
+        /// Store name to pass to <see cref="UnityIAPServices.StoreController"/>.
         /// </summary>
         public static string StoreName => XsollaPurchasingStore.Name;
 
-        /// <summary>
-        /// Builder for <see cref="XsollaPurchasingModule"/>.
-        /// </summary>
-        public class Builder
+        [CanBeNull] private static XsollaPurchasingStore _store;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticsOnLoad()
         {
-            private XsollaClientConfiguration _configuration = XsollaClientConfiguration.Builder.Empty();
-
-            /// <summary>
-            /// Creates a new builder instance.
-            /// </summary>
-            public static Builder Create() => new Builder();
-
-            /// <summary>
-            /// Sets the client configuration.
-            /// </summary>
-            /// <param name="configuration">Client configuration.</param>
-            public Builder SetConfiguration(XsollaClientConfiguration configuration) { _configuration = configuration; return this; }
-
-            /// <summary>
-            /// Builds the <see cref="XsollaPurchasingModule"/> instance.
-            /// </summary>
-            public XsollaPurchasingModule Build() => new XsollaPurchasingModule(_configuration);
+            _store = null;
+            _validator = null;
         }
 
         /// <summary>
-        /// The client configuration for the purchasing module.
+        /// Whether <see cref="Register"/> has been called in this session.
         /// </summary>
-        [CanBeNull] private readonly XsollaClientConfiguration _configuration;
+        public static bool IsRegistered => _store != null;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="XsollaPurchasingModule"/>.
+        /// Registers the Xsolla store under <see cref="StoreName"/>. Call once, before creating the
+        /// <see cref="StoreController"/>; later calls are ignored.
         /// </summary>
         /// <param name="configuration">Client configuration.</param>
-        private XsollaPurchasingModule(XsollaClientConfiguration configuration)
+        /// <param name="setAsDefaultStore">Also make it the store <see cref="UnityIAPServices.StoreController"/> uses when given no name.</param>
+        public static void Register(XsollaClientConfiguration configuration, bool setAsDefaultStore = false)
         {
-            _configuration = configuration;
+            if (_store != null)
+            {
+                XsollaLogger.Warning("XsollaPurchasingModule", "Register: the Xsolla store is already registered");
+                return;
+            }
+
+            XsollaLogger.SetLogLevel(configuration.logLevel);
+
+            var store = new XsollaPurchasingStore(configuration);
+
+            UnityIAPServices.AddNewCustomStore(new XsollaPurchasingStoreWrapper(store));
+            UnityIAPServices.AddNewExtendedPurchaseService(StoreName,
+                basePurchaseService => new XsollaPurchasingPurchaseService(basePurchaseService, store));
+
+            if (setAsDefaultStore)
+                UnityIAPServices.SetStoreAsDefault(StoreName);
+
+            _store = store;
         }
 
-        #region AbstractPurchasingModule
+        [CanBeNull] private static XsollaPurchasingStoreValidator _validator;
 
         /// <summary>
-        /// Configures the purchasing module and registers the Xsolla store.
+        /// Validator for receipts of Xsolla orders (<c>order.Info.Receipt</c>). Requires <see cref="Register"/>.
         /// </summary>
-        public override void Configure()
+        [CanBeNull]
+        public static XsollaPurchasingStoreValidator GetValidator()
         {
-            XsollaLogger.SetLogLevel(_configuration.logLevel);
+            if (_store == null)
+                return null;
 
-            var store = new XsollaPurchasingStore(_configuration);
-
-            BindExtension<IXsollaPurchasingStoreExtension>(store);
-            BindConfiguration<IXsollaPurchasingStoreConfiguration>(store);
-
-            RegisterStore(StoreName, store);
+            return _validator ??= new XsollaPurchasingStoreValidator(_store.StoreClient);
         }
-
-        #endregion
     }
 }
 #endif

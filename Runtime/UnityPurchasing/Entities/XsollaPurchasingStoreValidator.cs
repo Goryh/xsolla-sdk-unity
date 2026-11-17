@@ -1,6 +1,5 @@
 #if !XSOLLA_SDK_UNITY_PURCHASING_DISABLE
 using System;
-using UnityEngine.Purchasing.Security;
 using Xsolla.SDK.Common;
 using Xsolla.SDK.Store;
 
@@ -26,6 +25,14 @@ namespace Xsolla.SDK.UnityPurchasing
         {
             _storeClient = store;
         }
+
+        /// <summary>
+        /// Whether the Unity IAP receipt (<c>order.Info.Receipt</c>) belongs to an Xsolla order.
+        /// Such receipts are not understood by <c>CrossPlatformValidator</c>; validate them with <see cref="Validate"/>.
+        /// </summary>
+        public static bool IsXsollaReceipt(string receipt) =>
+            !string.IsNullOrEmpty(receipt) &&
+            receipt.IndexOf("\"Store\":\"" + XsollaPurchasingStore.Name + "\"", StringComparison.Ordinal) >= 0;
 
         /// <summary>
         /// Validates the given purchase receipt by sending it to the Xsolla Store backend.

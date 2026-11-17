@@ -2,9 +2,7 @@
     "name": "Xsolla.SDK.UnityPurchasing",
     "rootNamespace": "",
     "references": [
-        "UnityEngine.Purchasing",
-        "UnityEngine.Purchasing.Stores",
-        "UnityEngine.Purchasing.SecurityCore",
+        "Unity.Purchasing",
         "Xsolla.SDK.Common",
         "Xsolla.SDK.Utils",
         "Xsolla.SDK.Store"

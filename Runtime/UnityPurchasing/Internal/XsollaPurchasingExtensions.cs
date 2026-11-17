@@ -1,84 +1,16 @@
 ﻿#if !XSOLLA_SDK_UNITY_PURCHASING_DISABLE
 using JetBrains.Annotations;
 using System;
-using UnityEngine;
-using UnityEngine.Purchasing;
 using Xsolla.SDK.Common;
 
 namespace Xsolla.SDK.UnityPurchasing
 {
-    /// <summary>
-    /// <see cref="UnityEngine.Purchasing.Product"/>'s <see cref="UnityEngine.Purchasing.Product.receipt"/> in a deserialized form.
-    /// </summary>
-    internal readonly struct PurchaseEventPayload
-    {
-        public enum OrderStatus
-        {
-            Unknown = 0,
-            New = 1,
-            Paid = 2,
-            Done = 3,
-            Canceled = 4,
-            Restored = 5,
-            RestoredByEvent = 6,
-            Free = 7
-        }
-
-        public readonly string productId;
-        public readonly long orderId;
-        public readonly string invoiceId;
-        public readonly string transactionId;
-        public readonly string receipt;
-        public readonly OrderStatus orderStatus;
-
-        internal PurchaseEventPayload(
-            [NotNull] PurchaseEventArgsExtensions.DeserializedPayload deserializedPayload
-        )
-        {
-            productId = deserializedPayload.productId;
-            orderId = deserializedPayload.orderId;
-            invoiceId = deserializedPayload.invoiceId;
-            transactionId = deserializedPayload.transactionId;
-            receipt = deserializedPayload.receipt;
-
-            this.orderStatus = Enum.TryParse<OrderStatus>(deserializedPayload.orderStatus, ignoreCase: true, out var orderStatus)
-                ? orderStatus
-                : OrderStatus.Unknown;
-        }
-
-        public override string ToString() =>
-            $"Payload [productId='{productId}', orderId={orderId}, invoiceId='{invoiceId}', " +
-            $"transactionId='{transactionId}', receipt='{receipt}', orderStatus={orderStatus}]";
-    }
-
     internal static class PurchaseEventArgsExtensions
     {
-        [Serializable]
-        internal sealed class DeserializedPayload
-        {
-            public string productId;
-            public long orderId;
-            public string invoiceId;
-            public string transactionId;
-            public string receipt;
-            public string orderStatus;
-
-            public DeserializedPayload() {}
-
-            public DeserializedPayload(
-                string productId, long orderId, string invoiceId, string transactionId,
-                string receipt, string orderStatus
-            )
-            {
-                this.productId = productId;
-                this.orderId = orderId;
-                this.invoiceId = invoiceId;
-                this.transactionId = transactionId;
-                this.receipt = receipt;
-                this.orderStatus = orderStatus.ToLower();
-            }
-        }
-
+        /// <summary>
+        /// Extracts the Xsolla payload from a Unity IAP unified receipt
+        /// (<c>{"Payload":"...","Store":"...","TransactionID":"..."}</c>).
+        /// </summary>
         [CanBeNull]
         internal static string ExtractPayloadAsString(string receipt)
         {
@@ -104,9 +36,7 @@ namespace Xsolla.SDK.UnityPurchasing
                     payloadStartIndex, payloadEndIndex - payloadStartIndex + 1
                 );
 
-                var unescapedPayloadStr = UnescapeJsonString(escapedPayloadStr);
-
-                return unescapedPayloadStr;
+                return UnescapeJsonString(escapedPayloadStr);
             }
             catch (Exception e)
             {
@@ -142,18 +72,6 @@ namespace Xsolla.SDK.UnityPurchasing
 
                 return sb.ToString();
             }
-        }
-
-        internal static PurchaseEventPayload? ExtractPayload(this PurchaseEventArgs purchaseEventArgs)
-        {
-            if (!purchaseEventArgs.purchasedProduct.hasReceipt) return null;
-
-            var payloadStr = ExtractPayloadAsString(purchaseEventArgs.purchasedProduct.receipt);
-            if (!string.IsNullOrEmpty(payloadStr)) return null;
-
-            var payload = JsonUtility.FromJson<DeserializedPayload>(payloadStr);
-
-            return payload != null ? new PurchaseEventPayload(payload) : null;
         }
     }
 }
