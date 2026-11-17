@@ -64,6 +64,51 @@ namespace Xsolla.SDK.UnityPurchasing
             _store = store;
         }
 
+        /// <summary>
+        /// Gets the Xsolla user ID (the <c>sub</c> claim of the user JWT) of the logged-in user. Requires
+        /// <see cref="Register"/> and a connected store.
+        /// </summary>
+        /// <param name="completionHandler">Parameters: user ID (null on failure), error message (null on success).</param>
+        public static void GetUserId(System.Action<string, string> completionHandler)
+        {
+            if (_store == null)
+            {
+                completionHandler?.Invoke(null, "The Xsolla store is not registered");
+                return;
+            }
+
+            _store.StoreClient.GetAccessToken(
+                onSuccess: token =>
+                {
+                    var userId = TryGetJwtSubject(token);
+                    completionHandler?.Invoke(userId, userId == null ? "The access token has no subject" : null);
+                },
+                onError: error => completionHandler?.Invoke(null, error)
+            );
+        }
+
+        [CanBeNull]
+        internal static string TryGetJwtSubject([CanBeNull] string jwt)
+        {
+            try
+            {
+                var parts = jwt?.Split('.');
+                if (parts == null || parts.Length < 2)
+                    return null;
+
+                var payload = parts[1].Replace('-', '+').Replace('_', '/');
+                payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+                var json = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(payload));
+
+                var match = System.Text.RegularExpressions.Regex.Match(json, "\"sub\"\\s*:\\s*\"([^\"]+)\"");
+                return match.Success ? match.Groups[1].Value : null;
+            }
+            catch (System.Exception)
+            {
+                return null;
+            }
+        }
+
         [CanBeNull] private static XsollaPurchasingStoreValidator _validator;
 
         /// <summary>
